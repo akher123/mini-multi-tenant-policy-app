@@ -1,0 +1,76 @@
+@page "/login"
+@using Microsoft.AspNetCore.Authorization
+@attribute [AllowAnonymous]
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+
+<PageTitle>Login</PageTitle>
+
+<h1>Login</h1>
+
+<div class="card">
+    <div class="card-body">
+        <EditForm Model="_model" OnValidSubmit="HandleLoginAsync">
+            <DataAnnotationsValidator />
+
+            <div class="mb-3">
+                <label class="form-label" for="email">Email</label>
+                <InputText id="email" class="form-control" @bind-Value="_model.Email" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label" for="password">Password</label>
+                <InputText id="password" type="password" class="form-control" @bind-Value="_model.Password" />
+            </div>
+
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <div class="alert alert-danger">@_error</div>
+            }
+
+            <button class="btn btn-primary" type="submit" disabled="@_isSubmitting">Sign in</button>
+        </EditForm>
+
+        <p class="text-muted mt-3 mb-0">
+            Try <code>admin@tenanta.local</code> or <code>admin@tenantb.local</code> with password <code>Password123!</code>
+        </p>
+    </div>
+</div>
+
+@code {
+    private readonly LoginFormModel _model = new();
+    private string? _error;
+    private bool _isSubmitting;
+
+    [SupplyParameterFromQuery]
+    public string? ReturnUrl { get; set; }
+
+    private async Task HandleLoginAsync()
+    {
+        _error = null;
+        _isSubmitting = true;
+
+        try
+        {
+            var success = await AuthService.LoginAsync(_model.Email, _model.Password);
+            if (!success)
+            {
+                _error = "Invalid email or password.";
+                return;
+            }
+
+            var destination = string.IsNullOrWhiteSpace(ReturnUrl) ? "/" : ReturnUrl;
+            Navigation.NavigateTo(destination);
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private sealed class LoginFormModel
+    {
+        public string Email { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+    }
+}

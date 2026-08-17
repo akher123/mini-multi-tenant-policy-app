@@ -1,0 +1,75 @@
+@page "/customer-policy"
+@attribute [Authorize]
+@inject PolicyApiClient ApiClient
+
+<PageTitle>Customer Policy</PageTitle>
+
+<h1>Customer Policy</h1>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="mb-3">
+            <label class="form-label" for="customerId">Customer ID</label>
+            <input id="customerId" class="form-control" @bind="_customerIdText" placeholder="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" />
+        </div>
+        <button class="btn btn-primary" @onclick="LoadPolicyAsync" disabled="@_loading">Lookup</button>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+@if (_policy is not null)
+{
+    <div class="card">
+        <div class="card-body">
+            <dl class="row mb-0">
+                <dt class="col-sm-4">Policy Number</dt>
+                <dd class="col-sm-8">@_policy.PolicyNumber</dd>
+                <dt class="col-sm-4">Expiration Date</dt>
+                <dd class="col-sm-8">@_policy.ExpirationDate</dd>
+                <dt class="col-sm-4">Premium Amount</dt>
+                <dd class="col-sm-8">@_policy.PremiumAmount.ToString("C")</dd>
+            </dl>
+        </div>
+    </div>
+}
+
+@code {
+    private string _customerIdText = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+    private PolicyDto? _policy;
+    private string? _error;
+    private bool _loading;
+
+    private async Task LoadPolicyAsync()
+    {
+        _error = null;
+        _policy = null;
+
+        if (!Guid.TryParse(_customerIdText, out var customerId))
+        {
+            _error = "Enter a valid customer ID (GUID).";
+            return;
+        }
+
+        _loading = true;
+        try
+        {
+            _policy = await ApiClient.GetCustomerPolicyAsync(customerId);
+            if (_policy is null)
+            {
+                _error = "Policy not found for this customer (404). This may indicate cross-tenant access was blocked.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

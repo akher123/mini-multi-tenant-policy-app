@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="backend/MultiTenantPolicyApi.Domain/MultiTenantPolicyApi.Domain.csproj" />
+  <Project Path="backend/MultiTenantPolicyApi.Application/MultiTenantPolicyApi.Application.csproj" />
+  <Project Path="backend/MultiTenantPolicyApi.Infrastructure/MultiTenantPolicyApi.Infrastructure.csproj" />
+  <Project Path="backend/MultiTenantPolicyApi.Api/MultiTenantPolicyApi.Api.csproj" />
+  <Project Path="backend/tests/MultiTenantPolicyApi.Tests/MultiTenantPolicyApi.Tests.csproj" />
+  <Project Path="frontend/MultiTenantPolicyApi.Client/MultiTenantPolicyApi.Client.csproj" />
+</Solution>

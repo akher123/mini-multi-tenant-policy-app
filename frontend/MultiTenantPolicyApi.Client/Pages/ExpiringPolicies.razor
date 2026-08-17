@@ -1,0 +1,85 @@
+@page "/expiring-policies"
+@attribute [Authorize]
+@inject PolicyApiClient ApiClient
+
+<PageTitle>Expiring Policies</PageTitle>
+
+<h1>Expiring Policies</h1>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="mb-3">
+            <label class="form-label" for="withinDays">Within days</label>
+            <input id="withinDays" type="number" min="1" max="365" class="form-control" @bind="_withinDays" />
+        </div>
+        <button class="btn btn-primary" @onclick="LoadPoliciesAsync" disabled="@_loading">Search</button>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+@if (_policies.Count > 0)
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Policy Number</th>
+                <th>Customer</th>
+                <th>Expiration</th>
+                <th>Premium</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var policy in _policies)
+            {
+                <tr>
+                    <td>@policy.PolicyNumber</td>
+                    <td>@policy.CustomerName</td>
+                    <td>@policy.ExpirationDate</td>
+                    <td>@policy.PremiumAmount.ToString("C")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+else if (_searched)
+{
+    <p class="text-muted">No policies expiring in the selected window for your tenant.</p>
+}
+
+@code {
+    private int _withinDays = 30;
+    private IReadOnlyList<ExpiringPolicyDto> _policies = [];
+    private string? _error;
+    private bool _loading;
+    private bool _searched;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPoliciesAsync();
+    }
+
+    private async Task LoadPoliciesAsync()
+    {
+        _error = null;
+        _loading = true;
+        _searched = true;
+
+        try
+        {
+            _policies = await ApiClient.GetExpiringPoliciesAsync(_withinDays);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _policies = [];
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

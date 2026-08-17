@@ -1,0 +1,20 @@
+﻿@page "/"
+@using System.Security.Claims
+@attribute [Authorize]
+
+<PageTitle>Home</PageTitle>
+
+<h1>Multi-Tenant Policy Portal</h1>
+
+<AuthorizeView>
+    <Authorized Context="auth">
+        <p>Signed in as <strong>@auth.User.FindFirst(ClaimTypes.Email)?.Value</strong></p>
+        <p>Tenant ID: <code>@auth.User.FindFirst("tenant_id")?.Value</code></p>
+
+        <ul>
+            <li><a href="customer-policy">Look up customer policy</a></li>
+            <li><a href="expiring-policies">Expiring policies</a></li>
+            <li><a href="policy-expiration">Policy expiration lookup</a></li>
+        </ul>
+    </Authorized>
+</AuthorizeView>

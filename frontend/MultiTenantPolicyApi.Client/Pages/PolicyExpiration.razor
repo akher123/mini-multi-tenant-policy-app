@@ -1,0 +1,73 @@
+@page "/policy-expiration"
+@attribute [Authorize]
+@inject PolicyApiClient ApiClient
+
+<PageTitle>Policy Expiration</PageTitle>
+
+<h1>Policy Expiration Lookup</h1>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="mb-3">
+            <label class="form-label" for="policyNumber">Policy Number</label>
+            <input id="policyNumber" class="form-control" @bind="_policyNumber" placeholder="POL-A-001" />
+        </div>
+        <button class="btn btn-primary" @onclick="LoadExpirationAsync" disabled="@_loading">Lookup</button>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+@if (_result is not null)
+{
+    <div class="card">
+        <div class="card-body">
+            <dl class="row mb-0">
+                <dt class="col-sm-4">Policy Number</dt>
+                <dd class="col-sm-8">@_result.PolicyNumber</dd>
+                <dt class="col-sm-4">Expiration Date</dt>
+                <dd class="col-sm-8">@_result.ExpirationDate</dd>
+            </dl>
+        </div>
+    </div>
+}
+
+@code {
+    private string _policyNumber = "POL-A-001";
+    private PolicyExpirationDto? _result;
+    private string? _error;
+    private bool _loading;
+
+    private async Task LoadExpirationAsync()
+    {
+        _error = null;
+        _result = null;
+
+        if (string.IsNullOrWhiteSpace(_policyNumber))
+        {
+            _error = "Enter a policy number.";
+            return;
+        }
+
+        _loading = true;
+        try
+        {
+            _result = await ApiClient.GetPolicyExpirationAsync(_policyNumber.Trim());
+            if (_result is null)
+            {
+                _error = "Policy not found (404).";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

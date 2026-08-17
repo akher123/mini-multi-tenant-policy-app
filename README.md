@@ -1,24 +1,10 @@
 # Mini Multi-Tenant Policy API
 
-A minimal ASP.NET Core Web API demonstrating **tenant isolation** for a multi-tenant CRM-style policy system. Built with Clean Architecture, Carter minimal API modules, MediatR CQRS, FluentValidation, JWT auth with refresh tokens, and EF Core global query filters.
+A small ASP.NET Core API that keeps each tenant’s customer and policy data isolated. SQL Server LocalDB is used for storage. Tenant context comes from a JWT `tenant_id` claim, and EF Core global query filters apply that scope on every query.
 
-## Repository layout
+## Run locally
 
-```text
-backend/
-  MultiTenantPolicyApi.Domain/
-  MultiTenantPolicyApi.Application/
-  MultiTenantPolicyApi.Infrastructure/
-  MultiTenantPolicyApi.Api/
-  tests/MultiTenantPolicyApi.Tests/
-frontend/
-  MultiTenantPolicyApi.Client/    # Blazor WebAssembly
-MultiTenantPolicyApp.slnx
-```
-
-## Quick start
-
-**Prerequisites:** .NET 10 SDK (or .NET 9+), SQL Server LocalDB (included with Visual Studio / SQL Express).
+Requires the .NET 10 SDK and SQL Server LocalDB.
 
 ```bash
 dotnet restore MultiTenantPolicyApp.slnx
@@ -26,94 +12,46 @@ dotnet run --project backend/MultiTenantPolicyApi.Api
 dotnet test MultiTenantPolicyApp.slnx
 ```
 
-The API listens on `http://localhost:5105` (or the port shown in the console). Swagger UI is available in Development at `/swagger`.
+API: `http://localhost:5105` (Swagger at `/swagger` in Development).
 
-## Blazor WebAssembly client
+Optional UI: `dotnet run --project frontend/MultiTenantPolicyApi.Client` → `http://localhost:5216`.
 
-A standalone Blazor WASM UI calls the API with JWT authentication.
-
-**1. Start the API** (terminal 1):
+Seeded logins (password `Password123!`): `admin@tenanta.local`, `admin@tenantb.local`.
 
 ```bash
-dotnet run --project backend/MultiTenantPolicyApi.Api
-```
-
-**2. Start the client** (terminal 2):
-
-```bash
-dotnet run --project frontend/MultiTenantPolicyApi.Client
-```
-
-Open `http://localhost:5216`, sign in with a seeded user, then use:
-
-- **Customer Policy** — lookup by customer ID (try cross-tenant ID `cccccccc-cccc-cccc-cccc-cccccccccccc` as TenantA → 404)
-- **Expiring Policies** — policies expiring within N days for your tenant
-- **Policy Expiration** — exact expiration date from the database
-
-Configure the API URL in [`frontend/MultiTenantPolicyApi.Client/wwwroot/appsettings.json`](frontend/MultiTenantPolicyApi.Client/wwwroot/appsettings.json) (`Api:BaseUrl`). CORS origins for the client are configured in the API [`backend/MultiTenantPolicyApi.Api/appsettings.json`](backend/MultiTenantPolicyApi.Api/appsettings.json).
-
-## Try it (curl)
-
-**1. Login as TenantA**
-
-```bash
+# 1. Login
 curl -X POST http://localhost:5105/api/auth/login \
   -H "Content-Type: application/json" \
   -d "{\"email\":\"admin@tenanta.local\",\"password\":\"Password123!\"}"
-```
 
-Copy `accessToken` from the response.
-
-**2. Get a customer's policy**
-
-```bash
+# 2. Customer policy
 curl http://localhost:5105/api/customers/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/policy \
   -H "Authorization: Bearer <accessToken>"
-```
 
-**3. List expiring policies**
-
-```bash
+# 3. Expiring policies
 curl "http://localhost:5105/api/policies/expiring?withinDays=30" \
   -H "Authorization: Bearer <accessToken>"
-```
 
-**4. Bonus — exact expiration date from DB**
-
-```bash
+# 4. Bonus — exact expiration date from the database
 curl http://localhost:5105/api/policies/POL-A-001/expiration \
   -H "Authorization: Bearer <accessToken>"
 ```
 
-**Cross-tenant check:** Login as TenantA, then request TenantB's customer ID (`cccccccc-cccc-cccc-cccc-cccccccccccc`). Expect **404 Not Found** — not 403.
-
-Seeded users: `admin@tenanta.local` / `admin@tenantb.local` (password: `Password123!`).
+Cross-tenant check: as TenantA, request TenantB’s customer `cccccccc-cccc-cccc-cccc-cccccccccccc`. The API returns **404**, not 403, so it does not confirm that the other tenant’s record exists.
 
 ## Tenant isolation — how and why
 
-Isolation uses three layers:
+Tenant is never taken from a header or query string. At login, `TenantId` is written into the JWT. `HttpTenantContext` reads that claim on each request. `AppDbContext` then applies global query filters on `Customer` and `Policy`:
 
-1. **Auth boundary** — At login, the user's `TenantId` is embedded in the JWT as a `tenant_id` claim. Clients cannot override tenant via headers or query params.
-2. **Request scope** — `HttpTenantContext` reads `tenant_id` from the validated token on each request.
-3. **Data boundary** — `AppDbContext` applies EF Core **global query filters** on `Customer` and `Policy`, automatically scoping every query to the current tenant.
+```csharp
+c => c.TenantId == _tenantContext.TenantId
+p => p.TenantId == _tenantContext.TenantId
+```
 
-**Why JWT + EF filters?** Defense in depth. JWT ensures the tenant context is authenticated and tamper-proof. EF global filters ensure that even if a future developer forgets a manual `WHERE TenantId = ...`, the database layer still filters. Cross-tenant access returns **404** (not 403) to avoid confirming that a resource exists in another tenant.
+Handlers and repositories do not add a tenant `WHERE` clause. Isolation lives in the data layer, so a forgotten filter cannot leak another tenant’s rows. The unit test `GetCustomerPolicyQueryHandler_ReturnsNull_WhenCustomerIdBelongsToAnotherTenant` proves this: under TenantA’s context, TenantB’s `customerId` returns null.
 
-Key files for reviewers:
-- `backend/MultiTenantPolicyApi.Infrastructure/Persistence/AppDbContext.cs` — global filters
-- `backend/MultiTenantPolicyApi.Api/Services/HttpTenantContext.cs` — JWT → tenant
-- `backend/tests/MultiTenantPolicyApi.Tests/GetCustomerPolicyQueryHandlerTests.cs` — cross-tenant unit test
-
-## Project structure
-
-| Layer | Project | Role |
-|-------|---------|------|
-| Domain | `backend/MultiTenantPolicyApi.Domain` | Entities |
-| Application | `backend/MultiTenantPolicyApi.Application` | MediatR handlers, validators, interfaces |
-| Infrastructure | `backend/MultiTenantPolicyApi.Infrastructure` | EF Core, auth, repositories |
-| Api | `backend/MultiTenantPolicyApi.Api` | Carter endpoints, JWT wiring |
-| Client | `frontend/MultiTenantPolicyApi.Client` | Blazor WebAssembly UI |
+JWT is used instead of a client-supplied tenant header because the claim is signed and cannot be swapped. Filters are used instead of per-query checks so every read is scoped, including the expiring-policies list and the bonus expiration lookup.
 
 ## Scaling to production
 
-For real production workloads: use an external IdP (OAuth2/OIDC), store refresh tokens in a dedicated table with device binding, add SQL Server row-level security as a DB-level backup to EF filters, consider per-tenant databases or schemas for large clients, rotate signing keys, and add audit logging for cross-tenant access attempts.
+For real data: add SQL Server row-level security as a database-level backup, consider a database or schema per large tenant, use an external identity provider, persist and rotate refresh tokens, and audit denied cross-tenant lookups. The current shared-database + filter approach is enough for this exercise.

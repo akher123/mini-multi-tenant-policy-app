@@ -1,16 +1,3 @@
-using System.Text;
-using Carter;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
-using MultiTenantPolicyApi.Api;
-using MultiTenantPolicyApi.Api.Services;
-using MultiTenantPolicyApi.Application;
-using MultiTenantPolicyApi.Application.Common.Interfaces;
-using MultiTenantPolicyApi.Infrastructure;
-using MultiTenantPolicyApi.Infrastructure.Auth;
-using MultiTenantPolicyApi.Infrastructure.Persistence;
-
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddApplication();

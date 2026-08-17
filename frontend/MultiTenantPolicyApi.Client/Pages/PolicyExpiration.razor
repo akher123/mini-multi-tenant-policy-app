@@ -5,6 +5,7 @@
 <PageTitle>Policy Expiration</PageTitle>
 
 <h1>Policy Expiration Lookup</h1>
+<p class="text-muted">GET /api/policies/{policyNumber}/expiration — exact stored date from the database, or 404.</p>
 
 <div class="card mb-3">
     <div class="card-body">
@@ -12,58 +13,66 @@
             <label class="form-label" for="policyNumber">Policy Number</label>
             <input id="policyNumber" class="form-control" @bind="_policyNumber" placeholder="POL-A-001" />
         </div>
-        <button class="btn btn-primary" @onclick="LoadExpirationAsync" disabled="@_loading">Lookup</button>
+        <div class="d-flex flex-wrap gap-2 mb-3">
+            <button class="btn btn-sm btn-outline-secondary" @onclick='() => _policyNumber = SeedData.PolicyA1'>@SeedData.PolicyA1 (TenantA)</button>
+            <button class="btn btn-sm btn-outline-warning" @onclick='() => _policyNumber = SeedData.PolicyB1'>@SeedData.PolicyB1 (TenantB — 404 if logged in as A)</button>
+        </div>
+        <button class="btn btn-primary" @onclick="LoadExpirationAsync" disabled="@_loading">Lookup expiration</button>
     </div>
 </div>
 
-@if (!string.IsNullOrEmpty(_error))
+@if (_lastStatusCode.HasValue)
 {
-    <div class="alert alert-danger">@_error</div>
+    <HttpStatusAlert StatusCode="_lastStatusCode" Message="_statusMessage" />
 }
 
 @if (_result is not null)
 {
     <div class="card">
+        <div class="card-header">Exact value from database</div>
         <div class="card-body">
             <dl class="row mb-0">
                 <dt class="col-sm-4">Policy Number</dt>
                 <dd class="col-sm-8">@_result.PolicyNumber</dd>
                 <dt class="col-sm-4">Expiration Date</dt>
-                <dd class="col-sm-8">@_result.ExpirationDate</dd>
+                <dd class="col-sm-8"><strong>@_result.ExpirationDate</strong> (stored value — not computed)</dd>
             </dl>
         </div>
     </div>
 }
 
 @code {
-    private string _policyNumber = "POL-A-001";
+    private string _policyNumber = SeedData.PolicyA1;
     private PolicyExpirationDto? _result;
-    private string? _error;
+    private string? _statusMessage;
+    private int? _lastStatusCode;
     private bool _loading;
 
     private async Task LoadExpirationAsync()
     {
-        _error = null;
+        _statusMessage = null;
         _result = null;
+        _lastStatusCode = null;
 
         if (string.IsNullOrWhiteSpace(_policyNumber))
         {
-            _error = "Enter a policy number.";
+            _statusMessage = "Enter a policy number.";
+            _lastStatusCode = 400;
             return;
         }
 
         _loading = true;
         try
         {
-            _result = await ApiClient.GetPolicyExpirationAsync(_policyNumber.Trim());
-            if (_result is null)
-            {
-                _error = "Policy not found (404).";
-            }
-        }
-        catch (Exception ex)
-        {
-            _error = ex.Message;
+            var result = await ApiClient.GetPolicyExpirationAsync(_policyNumber.Trim());
+            _lastStatusCode = result.StatusCode;
+            _result = result.Data;
+
+            _statusMessage = result.IsNotFound
+                ? "404 Not Found — policy not in your tenant or does not exist."
+                : result.IsSuccess
+                    ? "Exact expiration date returned from database."
+                    : result.ErrorMessage;
         }
         finally
         {

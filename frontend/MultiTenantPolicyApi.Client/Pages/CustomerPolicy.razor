@@ -5,25 +5,32 @@
 <PageTitle>Customer Policy</PageTitle>
 
 <h1>Customer Policy</h1>
+<p class="text-muted">GET /api/customers/{customerId}/policy — returns policy for the authenticated tenant only.</p>
 
 <div class="card mb-3">
     <div class="card-body">
         <div class="mb-3">
             <label class="form-label" for="customerId">Customer ID</label>
-            <input id="customerId" class="form-control" @bind="_customerIdText" placeholder="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" />
+            <input id="customerId" class="form-control font-monospace" @bind="_customerIdText" />
         </div>
-        <button class="btn btn-primary" @onclick="LoadPolicyAsync" disabled="@_loading">Lookup</button>
+        <div class="d-flex flex-wrap gap-2 mb-3">
+            <button class="btn btn-sm btn-outline-secondary" @onclick="() => SetCustomer(SeedData.CustomerA1Id)">TenantA — CustomerA1</button>
+            <button class="btn btn-sm btn-outline-secondary" @onclick="() => SetCustomer(SeedData.CustomerA2Id)">TenantA — CustomerA2</button>
+            <button class="btn btn-sm btn-outline-warning" @onclick="() => SetCustomer(SeedData.CustomerB1Id)">TenantB — CustomerB1 (cross-tenant if logged in as A)</button>
+        </div>
+        <button class="btn btn-primary" @onclick="LoadPolicyAsync" disabled="@_loading">Lookup policy</button>
     </div>
 </div>
 
-@if (!string.IsNullOrEmpty(_error))
+@if (_lastStatusCode.HasValue)
 {
-    <div class="alert alert-danger">@_error</div>
+    <HttpStatusAlert StatusCode="_lastStatusCode" Message="_statusMessage" />
 }
 
 @if (_policy is not null)
 {
     <div class="card">
+        <div class="card-header">Policy (your tenant)</div>
         <div class="card-body">
             <dl class="row mb-0">
                 <dt class="col-sm-4">Policy Number</dt>
@@ -38,34 +45,39 @@
 }
 
 @code {
-    private string _customerIdText = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+    private string _customerIdText = SeedData.CustomerA1Id.ToString();
     private PolicyDto? _policy;
-    private string? _error;
+    private string? _statusMessage;
+    private int? _lastStatusCode;
     private bool _loading;
+
+    private void SetCustomer(Guid customerId) => _customerIdText = customerId.ToString();
 
     private async Task LoadPolicyAsync()
     {
-        _error = null;
+        _statusMessage = null;
         _policy = null;
+        _lastStatusCode = null;
 
         if (!Guid.TryParse(_customerIdText, out var customerId))
         {
-            _error = "Enter a valid customer ID (GUID).";
+            _statusMessage = "Enter a valid customer ID (GUID).";
+            _lastStatusCode = 400;
             return;
         }
 
         _loading = true;
         try
         {
-            _policy = await ApiClient.GetCustomerPolicyAsync(customerId);
-            if (_policy is null)
-            {
-                _error = "Policy not found for this customer (404). This may indicate cross-tenant access was blocked.";
-            }
-        }
-        catch (Exception ex)
-        {
-            _error = ex.Message;
+            var result = await ApiClient.GetCustomerPolicyAsync(customerId);
+            _lastStatusCode = result.StatusCode;
+            _policy = result.Data;
+
+            _statusMessage = result.IsNotFound
+                ? "404 Not Found — customer not in your tenant (expected for cross-tenant IDs)."
+                : result.IsSuccess
+                    ? "Policy returned for your tenant."
+                    : result.ErrorMessage;
         }
         finally
         {

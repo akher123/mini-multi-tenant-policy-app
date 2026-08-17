@@ -1,7 +1,3 @@
-using System.Security.Claims;
-using MultiTenantPolicyApi.Application.Common.Interfaces;
-using MultiTenantPolicyApi.Infrastructure.Auth;
-
 namespace MultiTenantPolicyApi.Api.Services;
 
 public sealed class HttpTenantContext : ITenantContext

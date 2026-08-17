@@ -7,6 +7,7 @@
 <PageTitle>Login</PageTitle>
 
 <h1>Login</h1>
+<p class="text-muted">Tenant context is set from your user account and embedded in the JWT — not selectable here.</p>
 
 <div class="card">
     <div class="card-body">
@@ -31,9 +32,12 @@
             <button class="btn btn-primary" type="submit" disabled="@_isSubmitting">Sign in</button>
         </EditForm>
 
-        <p class="text-muted mt-3 mb-0">
-            Try <code>admin@tenanta.local</code> or <code>admin@tenantb.local</code> with password <code>Password123!</code>
-        </p>
+        <hr />
+        <p class="mb-2">Quick sign-in (seeded users):</p>
+        <div class="d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => LoginAsAsync(SeedData.TenantAEmail)" disabled="@_isSubmitting">TenantA</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => LoginAsAsync(SeedData.TenantBEmail)" disabled="@_isSubmitting">TenantB</button>
+        </div>
     </div>
 </div>
 
@@ -44,6 +48,13 @@
 
     [SupplyParameterFromQuery]
     public string? ReturnUrl { get; set; }
+
+    private async Task LoginAsAsync(string email)
+    {
+        _model.Email = email;
+        _model.Password = SeedData.DemoPassword;
+        await HandleLoginAsync();
+    }
 
     private async Task HandleLoginAsync()
     {

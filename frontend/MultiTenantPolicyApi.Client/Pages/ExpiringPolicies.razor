@@ -5,24 +5,27 @@
 <PageTitle>Expiring Policies</PageTitle>
 
 <h1>Expiring Policies</h1>
+<p class="text-muted">GET /api/policies/expiring?withinDays=N — only policies for your tenant.</p>
 
 <div class="card mb-3">
     <div class="card-body">
         <div class="mb-3">
-            <label class="form-label" for="withinDays">Within days</label>
+            <label class="form-label" for="withinDays">Within days (1–365)</label>
             <input id="withinDays" type="number" min="1" max="365" class="form-control" @bind="_withinDays" />
         </div>
         <button class="btn btn-primary" @onclick="LoadPoliciesAsync" disabled="@_loading">Search</button>
+        <button class="btn btn-outline-secondary ms-2" @onclick="SetDefaultWindow" disabled="@_loading">Use 30 days (assignment default)</button>
     </div>
 </div>
 
-@if (!string.IsNullOrEmpty(_error))
+@if (_lastStatusCode.HasValue)
 {
-    <div class="alert alert-danger">@_error</div>
+    <HttpStatusAlert StatusCode="_lastStatusCode" Message="_statusMessage" />
 }
 
 @if (_policies.Count > 0)
 {
+    <p class="text-muted small">Showing @(_policies.Count) policy(ies) expiring within @_withinDays days for <strong>your tenant only</strong>.</p>
     <table class="table table-striped">
         <thead>
             <tr>
@@ -45,7 +48,7 @@
         </tbody>
     </table>
 }
-else if (_searched)
+else if (_searched && _lastStatusCode == 200)
 {
     <p class="text-muted">No policies expiring in the selected window for your tenant.</p>
 }
@@ -53,7 +56,8 @@ else if (_searched)
 @code {
     private int _withinDays = 30;
     private IReadOnlyList<ExpiringPolicyDto> _policies = [];
-    private string? _error;
+    private string? _statusMessage;
+    private int? _lastStatusCode;
     private bool _loading;
     private bool _searched;
 
@@ -62,20 +66,34 @@ else if (_searched)
         await LoadPoliciesAsync();
     }
 
+    private void SetDefaultWindow()
+    {
+        _withinDays = 30;
+    }
+
     private async Task LoadPoliciesAsync()
     {
-        _error = null;
+        _statusMessage = null;
+        _lastStatusCode = null;
         _loading = true;
         _searched = true;
 
+        if (_withinDays is < 1 or > 365)
+        {
+            _statusMessage = "withinDays must be between 1 and 365.";
+            _lastStatusCode = 400;
+            _loading = false;
+            return;
+        }
+
         try
         {
-            _policies = await ApiClient.GetExpiringPoliciesAsync(_withinDays);
-        }
-        catch (Exception ex)
-        {
-            _error = ex.Message;
-            _policies = [];
+            var result = await ApiClient.GetExpiringPoliciesAsync(_withinDays);
+            _lastStatusCode = result.StatusCode;
+            _policies = result.Data ?? [];
+            _statusMessage = result.IsSuccess
+                ? $"Found {_policies.Count} expiring policy(ies) scoped to your tenant."
+                : result.ErrorMessage;
         }
         finally
         {

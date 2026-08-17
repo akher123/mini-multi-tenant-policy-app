@@ -1,20 +1,136 @@
 ﻿@page "/"
-@using System.Security.Claims
 @attribute [Authorize]
+@inject PolicyApiClient ApiClient
+@inject AuthenticationStateProvider AuthenticationStateProvider
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Assignment Demo</PageTitle>
 
 <h1>Multi-Tenant Policy Portal</h1>
+<p class="lead">Demonstrates the three assignment API endpoints with JWT tenant scoping.</p>
 
 <AuthorizeView>
     <Authorized Context="auth">
-        <p>Signed in as <strong>@auth.User.FindFirst(ClaimTypes.Email)?.Value</strong></p>
-        <p>Tenant ID: <code>@auth.User.FindFirst("tenant_id")?.Value</code></p>
+        <div class="card mb-4">
+            <div class="card-body">
+                <h2 class="h5">Your session</h2>
+                <dl class="row mb-0">
+                    <dt class="col-sm-3">User</dt>
+                    <dd class="col-sm-9">@AuthService.GetEmail(auth.User)</dd>
+                    <dt class="col-sm-3">Tenant ID</dt>
+                    <dd class="col-sm-9"><code>@AuthService.GetTenantId(auth.User)</code></dd>
+                    <dt class="col-sm-3">Auth</dt>
+                    <dd class="col-sm-9">JWT <code>tenant_id</code> claim — tenant cannot be changed from the client.</dd>
+                </dl>
+            </div>
+        </div>
 
-        <ul>
-            <li><a href="customer-policy">Look up customer policy</a></li>
-            <li><a href="expiring-policies">Expiring policies</a></li>
-            <li><a href="policy-expiration">Policy expiration lookup</a></li>
-        </ul>
+        <div class="row g-3 mb-4">
+            <div class="col-md-4">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h2 class="h6">1. Customer policy</h2>
+                        <p class="small text-muted">GET /api/customers/{customerId}/policy</p>
+                        <a class="btn btn-sm btn-outline-primary" href="customer-policy">Open</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h2 class="h6">2. Expiring policies</h2>
+                        <p class="small text-muted">GET /api/policies/expiring?withinDays=30</p>
+                        <a class="btn btn-sm btn-outline-primary" href="expiring-policies">Open</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h2 class="h6">3. Policy expiration (bonus)</h2>
+                        <p class="small text-muted">GET /api/policies/{policyNumber}/expiration</p>
+                        <a class="btn btn-sm btn-outline-primary" href="policy-expiration">Open</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header">Seeded demo data</div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Tenant</th>
+                            <th>Customer ID</th>
+                            <th>Policy</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>TenantA</td>
+                            <td><code>@SeedData.CustomerA1Id</code></td>
+                            <td>@SeedData.PolicyA1</td>
+                        </tr>
+                        <tr>
+                            <td>TenantB</td>
+                            <td><code>@SeedData.CustomerB1Id</code></td>
+                            <td>@SeedData.PolicyB1</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card border-warning">
+            <div class="card-header bg-warning-subtle">Cross-tenant isolation check</div>
+            <div class="card-body">
+                <p>
+                    Runs a lookup using <strong>another tenant's customer ID</strong> while signed in as your tenant.
+                    Assignment requirement: must return <strong>404 Not Found</strong> (not 403).
+                </p>
+                <button class="btn btn-warning" @onclick="RunCrossTenantCheckAsync" disabled="@_running">
+                    @(_running ? "Running…" : "Run cross-tenant test")
+                </button>
+
+                @if (_crossTenantStatusCode.HasValue)
+                {
+                    <HttpStatusAlert StatusCode="_crossTenantStatusCode" Message="_crossTenantMessage" />
+                }
+            </div>
+        </div>
     </Authorized>
 </AuthorizeView>
+
+@code {
+    private bool _running;
+    private int? _crossTenantStatusCode;
+    private string? _crossTenantMessage;
+
+    private async Task RunCrossTenantCheckAsync()
+    {
+        _running = true;
+        _crossTenantStatusCode = null;
+        _crossTenantMessage = null;
+
+        try
+        {
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var tenantId = AuthService.GetTenantId(authState.User);
+            var foreignCustomerId = tenantId == SeedData.TenantAId
+                ? SeedData.CustomerB1Id
+                : SeedData.CustomerA1Id;
+
+            var result = await ApiClient.GetCustomerPolicyAsync(foreignCustomerId);
+            _crossTenantStatusCode = result.StatusCode;
+            _crossTenantMessage = result.IsNotFound
+                ? "Correct — cross-tenant customer ID returned 404; no data leaked."
+                : result.IsSuccess
+                    ? "Unexpected — policy data was returned for another tenant's customer."
+                    : result.ErrorMessage ?? "Request failed.";
+        }
+        finally
+        {
+            _running = false;
+        }
+    }
+}

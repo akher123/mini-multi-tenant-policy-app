@@ -1,5 +1,3 @@
-using Carter;
-using MediatR;
 using MultiTenantPolicyApi.Application.Features.Policies.Queries.GetPolicyExpiration;
 
 namespace MultiTenantPolicyApi.Api.Endpoints;

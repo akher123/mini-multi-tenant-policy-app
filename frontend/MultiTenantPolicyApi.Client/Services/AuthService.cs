@@ -1,4 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Claims;
@@ -46,6 +47,36 @@ public sealed class AuthService
         return true;
     }
 
+    public async Task<bool> RefreshTokenAsync(CancellationToken cancellationToken = default)
+    {
+        var refreshToken = await _jsRuntime.InvokeAsync<string?>("localStorage.getItem", RefreshTokenKey);
+        if (string.IsNullOrWhiteSpace(refreshToken))
+        {
+            return false;
+        }
+
+        var response = await _httpClient.PostAsJsonAsync(
+            "api/auth/refresh",
+            new RefreshTokenRequest(refreshToken),
+            cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            await LogoutAsync();
+            return false;
+        }
+
+        var auth = await response.Content.ReadFromJsonAsync<AuthResponse>(cancellationToken);
+        if (auth is null)
+        {
+            return false;
+        }
+
+        await SaveTokensAsync(auth);
+        AuthenticationStateChanged?.Invoke();
+        return true;
+    }
+
     public async Task LogoutAsync()
     {
         await _jsRuntime.InvokeVoidAsync("localStorage.removeItem", AccessTokenKey);
@@ -69,9 +100,20 @@ public sealed class AuthService
         try
         {
             var jwt = new JwtSecurityTokenHandler().ReadJwtToken(token);
-            if (jwt.ValidTo < DateTime.UtcNow)
+            if (jwt.ValidTo < DateTime.UtcNow && !await RefreshTokenAsync())
             {
                 return new ClaimsPrincipal(new ClaimsIdentity());
+            }
+
+            if (jwt.ValidTo < DateTime.UtcNow)
+            {
+                token = await GetAccessTokenAsync();
+                if (string.IsNullOrWhiteSpace(token))
+                {
+                    return new ClaimsPrincipal(new ClaimsIdentity());
+                }
+
+                jwt = new JwtSecurityTokenHandler().ReadJwtToken(token);
             }
 
             var identity = new ClaimsIdentity(jwt.Claims, authenticationType: "jwt");
@@ -81,6 +123,16 @@ public sealed class AuthService
         {
             return new ClaimsPrincipal(new ClaimsIdentity());
         }
+    }
+
+    public static string? GetEmail(ClaimsPrincipal user) =>
+        user.FindFirst(ClaimTypes.Email)?.Value
+        ?? user.FindFirst("email")?.Value;
+
+    public static Guid? GetTenantId(ClaimsPrincipal user)
+    {
+        var claim = user.FindFirst("tenant_id")?.Value;
+        return Guid.TryParse(claim, out var tenantId) ? tenantId : null;
     }
 
     private async Task SaveTokensAsync(AuthResponse auth)
@@ -100,6 +152,25 @@ public sealed class AuthorizationMessageHandler : DelegatingHandler
     }
 
     protected override async Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken)
+    {
+        var response = await SendWithBearerAsync(request, cancellationToken);
+        if (response.StatusCode != HttpStatusCode.Unauthorized)
+        {
+            return response;
+        }
+
+        response.Dispose();
+        if (await _authService.RefreshTokenAsync(cancellationToken))
+        {
+            return await SendWithBearerAsync(request, cancellationToken);
+        }
+
+        return new HttpResponseMessage(HttpStatusCode.Unauthorized);
+    }
+
+    private async Task<HttpResponseMessage> SendWithBearerAsync(
         HttpRequestMessage request,
         CancellationToken cancellationToken)
     {

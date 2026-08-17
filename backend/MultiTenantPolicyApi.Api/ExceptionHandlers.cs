@@ -1,6 +1,3 @@
-using FluentValidation;
-using Microsoft.AspNetCore.Diagnostics;
-
 namespace MultiTenantPolicyApi.Api;
 
 public static class ExceptionHandlers

@@ -1,0 +1,26 @@
+@if (StatusCode.HasValue)
+{
+    <div class="alert @AlertClass mb-3" role="status">
+        <strong>HTTP @StatusCode</strong>
+        @if (!string.IsNullOrWhiteSpace(Message))
+        {
+            <span> — @Message</span>
+        }
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int? StatusCode { get; set; }
+
+    [Parameter]
+    public string? Message { get; set; }
+
+    private string AlertClass => StatusCode switch
+    {
+        200 => "alert-success",
+        404 => "alert-warning",
+        >= 400 => "alert-danger",
+        _ => "alert-info"
+    };
+}

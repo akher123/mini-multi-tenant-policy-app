@@ -1,7 +1,3 @@
-using Carter;
-using MediatR;
-using Microsoft.AspNetCore.Mvc;
-using MultiTenantPolicyApi.Application.Common.Models;
 using MultiTenantPolicyApi.Application.Features.Auth.Commands.RefreshToken;
 
 namespace MultiTenantPolicyApi.Api.Endpoints;

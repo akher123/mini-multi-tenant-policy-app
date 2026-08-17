@@ -4,6 +4,8 @@ public sealed record AuthResponse(string AccessToken, string RefreshToken, DateT
 
 public sealed record LoginRequest(string Email, string Password);
 
+public sealed record RefreshTokenRequest(string RefreshToken);
+
 public sealed record PolicyDto(string PolicyNumber, DateOnly ExpirationDate, decimal PremiumAmount);
 
 public sealed record ExpiringPolicyDto(

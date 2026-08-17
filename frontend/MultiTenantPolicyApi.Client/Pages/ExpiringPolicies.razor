@@ -20,7 +20,7 @@
 
 @if (_lastStatusCode.HasValue)
 {
-    <HttpStatusAlert StatusCode="_lastStatusCode" Message="_statusMessage" />
+    <HttpStatusAlert StatusCode="@_lastStatusCode" Message="@_statusMessage" />
 }
 
 @if (_policies.Count > 0)

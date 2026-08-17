@@ -20,13 +20,6 @@ builder.Services.AddScoped<AuthService>(sp =>
     new AuthService(new HttpClient { BaseAddress = new Uri(apiBaseUrl) }, sp.GetRequiredService<IJSRuntime>()));
 
 builder.Services.AddHttpClient<PolicyApiClient>(client => client.BaseAddress = new Uri(apiBaseUrl))
-    .AddHttpMessageHandler(sp =>
-    {
-        var authService = sp.GetRequiredService<AuthService>();
-        return new AuthorizationMessageHandler(authService)
-        {
-            InnerHandler = new HttpClientHandler()
-        };
-    });
+    .AddHttpMessageHandler(sp => new AuthorizationMessageHandler(sp.GetRequiredService<AuthService>()));
 
 await builder.Build().RunAsync();
